@@ -1,0 +1,15 @@
+{
+  "name": "valheim-panel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Painel web de gerenciamento do servidor dedicado de Valheim. Zero dependencias de runtime.",
+  "type": "commonjs",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/auth.test.js test/backup.test.js test/logparse.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

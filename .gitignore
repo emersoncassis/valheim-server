@@ -1,0 +1,25 @@
+# Segredos — NUNCA commitar
+.env
+.env.local
+*.env
+!.env.example
+
+# Dados do servidor (mundo, saves, configs gerados)
+data/
+backups/
+logs/
+
+# Node
+node_modules/
+npm-debug.log*
+.npm/
+
+# Sistema
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Editores
+.vscode/
+.idea/

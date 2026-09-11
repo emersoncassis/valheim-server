@@ -1,0 +1,61 @@
+services:
+  valheim:
+    image: lloesche/valheim-server:latest
+    container_name: ${VALHEIM_CONTAINER:-valheim-server}
+    restart: unless-stopped
+    stop_grace_period: 2m
+    cap_add:
+      - sys_nice
+    volumes:
+      - ./data/config:/config
+      - ./data/server:/opt/valheim
+    ports:
+      - "${VALHEIM_PORT:-2456}:${VALHEIM_PORT:-2456}/udp"
+      - "${VALHEIM_PORT_1:-2457}:${VALHEIM_PORT_1:-2457}/udp"
+      - "${VALHEIM_PORT_2:-2458}:${VALHEIM_PORT_2:-2458}/udp"
+    environment:
+      SERVER_NAME: ${VALHEIM_SERVER_NAME:-Meu Servidor Valheim}
+      WORLD_NAME: ${VALHEIM_WORLD_NAME:-Dedicated}
+      SERVER_PASS: ${VALHEIM_SERVER_PASS:?defina VALHEIM_SERVER_PASS no .env}
+      SERVER_PORT: ${VALHEIM_PORT:-2456}
+      SERVER_PUBLIC: ${VALHEIM_PUBLIC:-false}
+      ADMINLIST_IDS: ${VALHEIM_ADMIN_IDS:-}
+      TZ: ${TZ:-America/Sao_Paulo}
+      # Backup nativo da imagem desligado: usamos o nosso, com rotação.
+      BACKUPS: "false"
+      # Crossplay é flag de linha de comando. scripts/start.sh preenche isso
+      # a partir de VALHEIM_CROSSPLAY. No Dokploy (que não roda o script),
+      # defina VALHEIM_CROSSPLAY_ARG=-crossplay direto nas variáveis.
+      SERVER_ARGS: ${VALHEIM_CROSSPLAY_ARG:-}
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f valheim_server.x86_64 > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5m
+
+  panel:
+    build: ./panel
+    container_name: valheim-panel
+    restart: unless-stopped
+    ports:
+      - "${PANEL_PORT:-8080}:8080"
+    volumes:
+      # Controla o container do Valheim.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Lê mundo e escreve backups.
+      - ./data:/app/data
+      - ./backups:/app/backups
+    environment:
+      PANEL_USER: ${PANEL_USER:?defina PANEL_USER no .env}
+      PANEL_PASS: ${PANEL_PASS:?defina PANEL_PASS no .env}
+      PANEL_SESSION_SECRET: ${PANEL_SESSION_SECRET:?defina PANEL_SESSION_SECRET no .env}
+      PANEL_SESSION_HOURS: ${PANEL_SESSION_HOURS:-12}
+      VALHEIM_CONTAINER: ${VALHEIM_CONTAINER:-valheim-server}
+      VALHEIM_WORLD_NAME: ${VALHEIM_WORLD_NAME:-Dedicated}
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-6}
+      BACKUP_KEEP: ${BACKUP_KEEP:-14}
+      BACKUP_MAX_AGE_DAYS: ${BACKUP_MAX_AGE_DAYS:-30}
+      TZ: ${TZ:-America/Sao_Paulo}
+    depends_on:
+      - valheim
