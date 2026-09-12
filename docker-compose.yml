@@ -16,7 +16,12 @@ services:
     environment:
       SERVER_NAME: ${VALHEIM_SERVER_NAME:-Meu Servidor Valheim}
       WORLD_NAME: ${VALHEIM_WORLD_NAME:-Dedicated}
-      SERVER_PASS: ${VALHEIM_SERVER_PASS:?defina VALHEIM_SERVER_PASS no .env}
+      # Sem valor padrão de propósito: senha nunca tem default.
+      # Se vier vazia, a própria imagem do Valheim recusa subir e diz isso
+      # no log. Não usamos ${VAR:?} aqui porque isso quebra na interpolação
+      # do compose — antes de existir container, log ou terminal pra debugar
+      # (atrapalha deploy em PaaS, tipo Dokploy).
+      SERVER_PASS: ${VALHEIM_SERVER_PASS:-}
       SERVER_PORT: ${VALHEIM_PORT:-2456}
       SERVER_PUBLIC: ${VALHEIM_PUBLIC:-false}
       ADMINLIST_IDS: ${VALHEIM_ADMIN_IDS:-}
@@ -39,7 +44,8 @@ services:
     container_name: valheim-panel
     restart: unless-stopped
     ports:
-      - "${PANEL_PORT:-8080}:8080"
+      # Externa configurável; interna sempre 8080 (é onde o Node escuta).
+      - "${PANEL_PORT:-9091}:8080"
     volumes:
       # Controla o container do Valheim.
       - /var/run/docker.sock:/var/run/docker.sock
@@ -47,9 +53,13 @@ services:
       - ./data:/app/data
       - ./backups:/app/backups
     environment:
-      PANEL_USER: ${PANEL_USER:?defina PANEL_USER no .env}
-      PANEL_PASS: ${PANEL_PASS:?defina PANEL_PASS no .env}
-      PANEL_SESSION_SECRET: ${PANEL_SESSION_SECRET:?defina PANEL_SESSION_SECRET no .env}
+      # Sem default de propósito — senha e segredo nunca têm valor padrão.
+      # Vazio faz o preflight() do painel recusar subir e dizer exatamente
+      # o que falta, no log do container. Ver comentário em SERVER_PASS
+      # sobre por que não usamos ${VAR:?} aqui.
+      PANEL_USER: ${PANEL_USER:-}
+      PANEL_PASS: ${PANEL_PASS:-}
+      PANEL_SESSION_SECRET: ${PANEL_SESSION_SECRET:-}
       PANEL_SESSION_HOURS: ${PANEL_SESSION_HOURS:-12}
       VALHEIM_CONTAINER: ${VALHEIM_CONTAINER:-valheim-server}
       VALHEIM_WORLD_NAME: ${VALHEIM_WORLD_NAME:-Dedicated}
