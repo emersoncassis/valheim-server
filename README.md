@@ -165,6 +165,30 @@ receber o sinal de desligar. Matar na força perde o progresso desde o
 
 ---
 
+## Testar o painel localmente (sem Docker)
+
+Pra ver o painel funcionando antes de subir tudo:
+
+```
+cd C:\Users\emers\Desktop\REPO\valheim\panel
+npm run dev
+```
+
+Abre em <http://localhost:8080>. Se você ainda não criou o `.env`, ele usa
+credenciais de teste e mostra elas no terminal (`admin` / `teste12345`).
+
+**Funciona neste modo:** login, sessão, expiração, rate limit, o layout
+inteiro, lista de backups, download e restauração.
+
+**Não funciona:** Ligar / Parar / Reiniciar e a lista de jogadores online.
+Isso fala com o Docker, que não está rodando — os botões vão dar erro e o
+status vai aparecer como "Não criado". **É o esperado**, não é bug.
+
+Pra testar a parte de Docker de verdade, use o `./scripts/start.sh` num
+ambiente com Docker (WSL2, Linux, ou o servidor do Dokploy).
+
+---
+
 ## Painel
 
 - Liga, para e reinicia o servidor
