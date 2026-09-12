@@ -20,7 +20,8 @@ chmod +x scripts/*.sh
 ./scripts/start.sh
 ```
 
-Painel em <http://localhost:8080>.
+Painel em <http://localhost:9091> (porta padrão do `.env.example` —
+mude `PANEL_PORT` se quiser outra).
 
 A primeira subida baixa ~2 GB do Steam e demora. Acompanhe com
 `docker compose logs -f valheim` e espere aparecer `Game server connected`.
@@ -72,7 +73,8 @@ docker compose up -d --force-recreate
 ### Portas no firewall
 
 Libere **UDP** 2456, 2457 e 2458 (ou `VALHEIM_PORT` +1 +2).
-O painel é TCP 8080 — e esse é melhor **não** expor direto (veja Segurança).
+O painel é TCP na porta de `PANEL_PORT` (padrão 9091) — e essa porta é
+melhor **não** expor direto na internet (veja Segurança).
 
 ---
 
