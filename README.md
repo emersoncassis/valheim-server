@@ -7,8 +7,7 @@ Escrito pra ser entendido daqui a três meses, quando você tiver esquecido
 tudo. Se algo aqui não funcionar como está escrito, o README está errado —
 conserte ele.
 
-> **Ainda não é um repositório git.** Veja [PUBLICAR.md](PUBLICAR.md) — são
-> dois cliques no GitHub Desktop.
+> Repositório: <https://github.com/emersoncassis/valheim-server> (privado).
 
 ---
 
@@ -257,23 +256,66 @@ Cobre o que quebra **em silêncio**:
 
 ## Deploy no Dokploy
 
-1. **Create** → **Compose**
-2. Aponte pro repositório, branch `main`
-3. Compose path: `docker-compose.yml`
-4. Em **Environment**, cole o conteúdo do seu `.env` (o Dokploy guarda
-   isso fora do git)
-5. Domínio no serviço `panel`, porta `8080`, HTTPS ligado
-6. Deploy
+Repositório: `emersoncassis/valheim-server` (privado), branch **`master`**
+(não `main` — repare no nome ao configurar o Dokploy).
 
-Detalhe: o Dokploy não roda o `scripts/start.sh`, e é ele quem traduz
-`VALHEIM_CROSSPLAY` na flag do servidor. Se quiser crossplay lá, adicione
-também `VALHEIM_CROSSPLAY_ARG=-crossplay` nas variáveis.
+### Passo a passo
 
-As portas UDP do Valheim precisam estar abertas no firewall do servidor —
-o proxy do Dokploy só cuida de HTTP/HTTPS.
+1. No Dokploy: **Create Project** (ou use um projeto existente)
+2. Dentro do projeto: **Create Service** → **Compose**
+3. **Provider**: GitHub
+   - Se o Dokploy ainda não tem acesso ao repositório privado, ele pede
+     pra instalar o GitHub App / autorizar a organização — segue o fluxo
+     dele, é só autorização de leitura do repo
+   - Repository: `emersoncassis/valheim-server`
+   - Branch: `master`
+4. **Compose Path**: `docker-compose.yml` (raiz do repo, é onde está)
+5. Aba **Environment**: cole aqui o conteúdo do seu `.env` local, variável
+   por variável. O Dokploy guarda isso fora do git — é o lugar certo pra
+   senha, diferente do repositório. As obrigatórias:
 
-Volumes: `./data` e `./backups` ficam ao lado do compose. Não apague a
-pasta do projeto achando que é cache — o mundo está ali.
+   ```
+   VALHEIM_SERVER_PASS=...
+   PANEL_USER=admin
+   PANEL_PASS=...
+   PANEL_SESSION_SECRET=...
+   ```
+
+   E o resto das variáveis do `.env.example` que você quiser mudar do
+   padrão (`VALHEIM_SERVER_NAME`, `VALHEIM_WORLD_NAME`, etc.)
+
+6. Aba **Domains**: crie um domínio apontando pro serviço `panel`,
+   porta interna `8080`, com **HTTPS/Let's Encrypt** ligado. É o Traefik
+   do Dokploy cuidando do certificado — não precisa fazer nada além disso.
+7. **Deploy**
+
+A primeira subida demora — o container do Valheim baixa ~2 GB do Steam.
+Acompanhe pelo log do serviço `valheim` direto na interface do Dokploy.
+
+### Depois do primeiro deploy
+
+- Confirme no log que apareceu `Game server connected`
+- Abra o domínio configurado, faça login no painel com `PANEL_USER`/`PANEL_PASS`
+- Clique **Ligar** só se o servidor não subir sozinho (o compose já sobe
+  com `restart: unless-stopped`)
+
+### Detalhes que mordem
+
+- **Crossplay**: o Dokploy não roda `scripts/start.sh`, que é quem traduz
+  `VALHEIM_CROSSPLAY=true` na flag de linha de comando. Se quiser
+  crossplay em produção, adicione também
+  `VALHEIM_CROSSPLAY_ARG=-crossplay` direto nas variáveis do Dokploy.
+- **Portas UDP**: libere 2456, 2457, 2458 (UDP) no firewall do servidor
+  onde o Dokploy roda. O proxy dele só cuida de HTTP/HTTPS — as portas do
+  jogo passam direto, sem proxy.
+- **Volumes**: `./data` (mundo) e `./backups` ficam ao lado do compose,
+  no próprio servidor do Dokploy. Não são voláteis, mas também não têm
+  backup fora dali — o backup automático do painel salva no mesmo disco.
+  Se quiser redundância de verdade, baixe backups pelo painel de vez em
+  quando e guarde em outro lugar.
+- **Atualizar o projeto**: dar push numa branch nova não redeploya sozinho
+  a não ser que você configure isso no Dokploy (auto-deploy ou webhook).
+  Por padrão, é redeploy manual pela interface.
 
 ---
 
