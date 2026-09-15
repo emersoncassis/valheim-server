@@ -9,6 +9,24 @@ data/
 backups/
 logs/
 
+# Mundos soltos na raiz. Acontece quando alguém roda o servidor de dentro
+# da pasta do repositório: ele cria o mundo e os arquivos de config aqui.
+# Save de mundo NUNCA vai pro git — é pesado, muda a cada save e é seu.
+ICELAND/
+worlds_local/
+*.chunk
+*.db2
+*.fwl2
+
+# Arquivos que o servidor dedicado gera sozinho
+adminlist.txt
+bannedlist.txt
+permittedlist.txt
+steam_appid.txt
+start_server.sh
+docker_start_server.sh
+*.pdf
+
 # Node
 node_modules/
 npm-debug.log*
