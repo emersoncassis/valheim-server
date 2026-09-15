@@ -8,6 +8,9 @@ tudo. Se algo aqui não funcionar como está escrito, o README está errado —
 conserte ele.
 
 > Repositório: <https://github.com/emersoncassis/valheim-server> (privado).
+>
+> **Subindo num PC com Docker Desktop, trazendo um mundo que já existe?**
+> Vá direto pro [RODAR-NO-PC.md](RODAR-NO-PC.md) — é o passo a passo completo.
 
 ---
 

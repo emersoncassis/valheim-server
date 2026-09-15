@@ -140,12 +140,35 @@ async function listBackups(dir) {
 async function createBackup({ worldsDir, backupDir, world, keep, maxAgeDays }) {
   await fs.promises.mkdir(backupDir, { recursive: true });
 
-  // Se o mundo ainda não existe, não cria tar vazio.
-  const dbFile = path.join(worldsDir, `${world}.db`);
+  // Formato do save a partir do Valheim 1.0: o mundo é uma PASTA
+  // (worlds_local/<Mundo>/) com dezenas de .chunk mais os metadados
+  // _main.<n>.db2 / .fwl2 / .chunks / .ok — onde <n> é uma revisão que
+  // muda a cada save. Por isso empacotamos o diretório inteiro em vez de
+  // listar arquivos: qualquer lista fixa ficaria desatualizada sozinha.
+  //
+  // Antes da 1.0 eram dois arquivos soltos, <Mundo>.db e <Mundo>.fwl.
+  // Ainda aceitamos esse formato pra quem tem mundo antigo.
+  const worldDir = path.join(worldsDir, world);
+  const legacyDb = path.join(worldsDir, `${world}.db`);
+
+  let mode = null;
   try {
-    await fs.promises.access(dbFile);
-  } catch {
-    throw new Error(`mundo "${world}" ainda não existe em ${worldsDir} — nada pra salvar`);
+    const st = await fs.promises.stat(worldDir);
+    if (st.isDirectory()) mode = 'dir';
+  } catch { /* não é o formato novo */ }
+
+  if (!mode) {
+    try {
+      await fs.promises.access(legacyDb);
+      mode = 'legacy';
+    } catch { /* também não é o antigo */ }
+  }
+
+  if (!mode) {
+    throw new Error(
+      `mundo "${world}" não encontrado em ${worldsDir} — ` +
+      `esperava a pasta ${world}/ (Valheim 1.0+) ou ${world}.db (formato antigo)`
+    );
   }
 
   const name = backupName(world);
@@ -154,12 +177,14 @@ async function createBackup({ worldsDir, backupDir, world, keep, maxAgeDays }) {
   // Escreve em .tmp e só depois renomeia: se o processo morrer no meio,
   // não fica um .tar.gz truncado parecendo backup bom.
   const tmp = `${dest}.tmp`;
-  await execFileAsync('tar', [
-    '-czf', tmp,
-    '-C', worldsDir,
-    `${world}.db`,
-    `${world}.fwl`,
-  ]);
+
+  // O que entra no tar, conforme o formato detectado. Em ambos os casos os
+  // caminhos são relativos a worldsDir, então o restore extrai no lugar certo.
+  const entries = mode === 'dir'
+    ? [world]
+    : [`${world}.db`, `${world}.fwl`];
+
+  await execFileAsync('tar', ['-czf', tmp, '-C', worldsDir, ...entries]);
   await fs.promises.rename(tmp, dest);
 
   const all = await listBackups(backupDir);
@@ -204,6 +229,28 @@ async function restoreBackup({ worldsDir, backupDir, name, world }) {
     })).created;
   } catch {
     // Mundo pode não existir ainda (restaurar em servidor limpo). Segue.
+  }
+
+  // Se o mundo é pasta (formato 1.0+), apagamos a atual antes de extrair.
+  // Sem isso, os chunks do mundo atual que não existem no backup sobrevivem
+  // e se misturam com os restaurados — o mundo vira uma colcha de retalhos
+  // de dois saves diferentes, que é pior do que qualquer um dos dois.
+  // Só fazemos isso DEPOIS do backup de segurança acima ter sido criado.
+  const worldDir = path.join(worldsDir, world);
+  let hadDir = false;
+  try {
+    hadDir = (await fs.promises.stat(worldDir)).isDirectory();
+  } catch { /* não existe, nada a limpar */ }
+
+  if (hadDir) {
+    if (!safety) {
+      // Sem rede de segurança, apagar o mundo atual é irreversível. Recusa.
+      throw new Error(
+        'não foi possível criar o backup de segurança do mundo atual; ' +
+        'restauração abortada para não apagar o mundo sem cópia'
+      );
+    }
+    await fs.promises.rm(worldDir, { recursive: true, force: true });
   }
 
   await execFileAsync('tar', ['-xzf', resolved, '-C', worldsDir]);

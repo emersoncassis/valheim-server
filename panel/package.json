@@ -8,7 +8,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node dev.js",
-    "test": "node --test test/auth.test.js test/backup.test.js test/logparse.test.js"
+    "test": "node --test test/auth.test.js test/backup.test.js test/backup-world.test.js test/logparse.test.js"
   },
   "engines": {
     "node": ">=20"

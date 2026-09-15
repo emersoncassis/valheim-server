@@ -11,8 +11,16 @@ BACKUP_DIR="backups"
 KEEP="${BACKUP_KEEP:-14}"
 MAX_AGE="${BACKUP_MAX_AGE_DAYS:-30}"
 
-if [ ! -f "$WORLDS_DIR/$WORLD.db" ]; then
+# Valheim 1.0+ guarda o mundo como PASTA (worlds_local/<Mundo>/) cheia de
+# .chunk mais os metadados _main.<n>.db2/.fwl2/.chunks/.ok. Antes da 1.0
+# eram dois arquivos soltos. Detectamos os dois formatos.
+if [ -d "$WORLDS_DIR/$WORLD" ]; then
+  ENTRIES=("$WORLD")
+elif [ -f "$WORLDS_DIR/$WORLD.db" ]; then
+  ENTRIES=("$WORLD.db" "$WORLD.fwl")
+else
   echo "ERRO: mundo '$WORLD' não encontrado em $WORLDS_DIR"
+  echo "Esperava a pasta $WORLD/ (Valheim 1.0+) ou $WORLD.db (formato antigo)."
   echo "O servidor já rodou pelo menos uma vez?"
   exit 1
 fi
@@ -21,9 +29,8 @@ mkdir -p "$BACKUP_DIR"
 STAMP=$(date +%Y%m%dT%H%M%S)
 NAME="valheim-${WORLD}-${STAMP}.tar.gz"
 
-# .db e .fwl: sem o .fwl o mundo não abre.
 # Escreve em .tmp primeiro pra não deixar tar truncado se morrer no meio.
-tar -czf "$BACKUP_DIR/$NAME.tmp" -C "$WORLDS_DIR" "$WORLD.db" "$WORLD.fwl"
+tar -czf "$BACKUP_DIR/$NAME.tmp" -C "$WORLDS_DIR" "${ENTRIES[@]}"
 mv "$BACKUP_DIR/$NAME.tmp" "$BACKUP_DIR/$NAME"
 echo "Criado: $BACKUP_DIR/$NAME"
 

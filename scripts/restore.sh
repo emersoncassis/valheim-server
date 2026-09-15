@@ -34,10 +34,25 @@ echo "Parando o servidor..."
 docker compose stop -t 120 valheim
 
 # Rede de segurança: se o backup escolhido for o errado, dá pra voltar.
-if [ -f "$WORLDS_DIR/$WORLD.db" ]; then
+SAFETY=""
+if [ -d "$WORLDS_DIR/$WORLD" ]; then
+  SAFETY="$BACKUP_DIR/pre-restore-${WORLD}-$(date +%Y%m%dT%H%M%S).tar.gz"
+  tar -czf "$SAFETY" -C "$WORLDS_DIR" "$WORLD"
+  echo "Mundo atual salvo em: $SAFETY"
+elif [ -f "$WORLDS_DIR/$WORLD.db" ]; then
   SAFETY="$BACKUP_DIR/pre-restore-${WORLD}-$(date +%Y%m%dT%H%M%S).tar.gz"
   tar -czf "$SAFETY" -C "$WORLDS_DIR" "$WORLD.db" "$WORLD.fwl"
   echo "Mundo atual salvo em: $SAFETY"
+fi
+
+# Mundo em pasta: apaga a atual antes de extrair, senão chunks do mundo
+# antigo que não existem no backup sobrevivem e se misturam com os novos.
+if [ -d "$WORLDS_DIR/$WORLD" ]; then
+  if [ -z "$SAFETY" ]; then
+    echo "ERRO: sem backup de segurança, não vou apagar o mundo atual."
+    exit 1
+  fi
+  rm -rf "${WORLDS_DIR:?}/${WORLD:?}"
 fi
 
 mkdir -p "$WORLDS_DIR"
