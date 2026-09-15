@@ -1,32 +1,19 @@
 # =====================================================================
-#  Setup do servidor Valheim — PC com Docker Desktop (Windows)
+#  Setup do servidor Valheim - PC com Docker Desktop (Windows)
 #
-#  Faz tudo o que dá pra automatizar:
-#    - confere Docker
-#    - cria o .env com senhas que VOCÊ digita (nunca fixas no arquivo)
-#    - gera o segredo de sessão com gerador criptográfico
-#    - cria as pastas
-#    - importa o mundo (de pasta ou .zip)
-#    - sobe os containers
+#  ASCII puro, sem acentos e sem here-strings: as duas coisas ja
+#  quebraram o parser do PowerShell 5 neste arquivo.
 #
 #  Uso:
 #      .\setup.ps1
 #      .\setup.ps1 -MundoOrigem "D:\ICELAND"
 #      .\setup.ps1 -MundoOrigem "D:\ICELAND.zip"
-#
-#  Não precisa rodar como administrador, exceto se pedir a regra de
-#  firewall no fim.
+#      .\setup.ps1 -MundoOrigem "D:\ICELAND.zip" -SemSubir
 # =====================================================================
 
 param(
-  # Pasta OU .zip do mundo a importar. Se omitido, o script procura no
-  # save local do Valheim desta máquina.
   [string]$MundoOrigem = "",
-
-  # Nome do mundo. Precisa bater com o nome da pasta do save.
   [string]$Mundo = "ICELAND",
-
-  # Pula a subida dos containers (só prepara os arquivos).
   [switch]$SemSubir
 )
 
@@ -45,22 +32,19 @@ function Erro($t)  { Write-Host "  [X]  $t" -ForegroundColor Red }
 Titulo "1/6  Conferindo o Docker"
 
 try {
-  docker version --format '{{.Server.Version}}' | Out-Null
+  docker version --format "{{.Server.Version}}" | Out-Null
   Ok "Docker respondendo"
 } catch {
   Erro "Docker nao esta rodando."
-  Write-Host ""
-  Write-Host "  Abra o Docker Desktop e espere a baleia ficar estavel na" -ForegroundColor Yellow
-  Write-Host "  bandeja do sistema. Depois rode este script de novo." -ForegroundColor Yellow
+  Write-Host "  Abra o Docker Desktop, espere a baleia estabilizar, e rode de novo." -ForegroundColor Yellow
   exit 1
 }
 
-# 'docker compose' (v2) e nao 'docker-compose' (v1, descontinuado)
 try {
   docker compose version | Out-Null
   Ok "docker compose disponivel"
 } catch {
-  Erro "'docker compose' nao encontrado. Atualize o Docker Desktop."
+  Erro "docker compose nao encontrado. Atualize o Docker Desktop."
   exit 1
 }
 
@@ -68,92 +52,126 @@ try {
 Titulo "2/6  Configurando o .env"
 
 if (Test-Path ".env") {
-  Aviso ".env ja existe - mantendo o que esta la."
-  Write-Host "       (apague o arquivo e rode de novo pra refazer)"
-} else {
+  Aviso ".env ja existe - mantendo. Apague o arquivo e rode de novo pra refazer."
+}
+else {
+  $nomeServidor = Read-Host "  Nome do servidor [Da Galera]"
+  if ([string]::IsNullOrWhiteSpace($nomeServidor)) {
+    $nomeServidor = "Da Galera"
+  }
 
-  # --- senha do jogo ---
-  # Regra do Valheim: minimo 5 caracteres e nao pode conter o nome do
-  # servidor nem o nome do mundo. Validamos aqui pra nao descobrir isso
-  # so quando o servidor subir e morrer sem explicar.
-  $nomeServidor = Read-Host "  Nome do servidor (aparece na lista) [Da Galera]"
-  if ([string]::IsNullOrWhiteSpace($nomeServidor)) { $nomeServidor = "Da Galera" }
+  # Senha do jogo. Regra do Valheim: minimo 5 caracteres, e nao pode
+  # conter o nome do servidor nem o nome do mundo. Validar aqui evita
+  # o sintoma classico: servidor sobe, morre, e o log nao explica.
+  $senhaJogo = ""
+  $senhaOk = $false
+  while (-not $senhaOk) {
+    $sp = Read-Host "  Senha do JOGO - min 5 caracteres" -AsSecureString
+    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sp)
+    $senhaJogo = [Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
+    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
 
-  do {
-    $sp = Read-Host "  Senha do JOGO (min 5, sem conter '$Mundo' nem o nome do servidor)" -AsSecureString
-    $senhaJogo = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-      [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sp))
-
-    $problema = $null
+    $problema = ""
     if ($senhaJogo.Length -lt 5) {
       $problema = "precisa de pelo menos 5 caracteres"
-    } elseif ($senhaJogo -like "*$Mundo*") {
-      $problema = "nao pode conter o nome do mundo ($Mundo)"
-    } else {
-      foreach ($palavra in $nomeServidor.Split(' ')) {
-        if ($palavra.Length -ge 3 -and $senhaJogo -like "*$palavra*") {
-          $problema = "nao pode conter '$palavra' (parte do nome do servidor)"
-          break
+    }
+    elseif ($senhaJogo.ToLower().Contains($Mundo.ToLower())) {
+      $problema = "nao pode conter o nome do mundo"
+    }
+    else {
+      foreach ($palavra in $nomeServidor.Split(" ")) {
+        if ($palavra.Length -ge 3) {
+          if ($senhaJogo.ToLower().Contains($palavra.ToLower())) {
+            $problema = "nao pode conter parte do nome do servidor"
+            break
+          }
         }
       }
     }
-    if ($problema) { Erro "Senha invalida: $problema" }
-  } while ($problema)
+
+    if ($problema -eq "") {
+      $senhaOk = $true
+    }
+    else {
+      Erro "Senha invalida: $problema"
+    }
+  }
   Ok "Senha do jogo aceita"
 
-  # --- senha do painel ---
-  do {
-    $pp = Read-Host "  Senha do PAINEL web (min 8 caracteres)" -AsSecureString
-    $senhaPainel = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-      [Runtime.InteropServices.Marshal]::SecureStringToBSTR($pp))
-    if ($senhaPainel.Length -lt 8) { Erro "Precisa de pelo menos 8 caracteres" }
-  } while ($senhaPainel.Length -lt 8)
+  # Senha do painel.
+  $senhaPainel = ""
+  $painelOk = $false
+  while (-not $painelOk) {
+    $pp = Read-Host "  Senha do PAINEL web - min 8 caracteres" -AsSecureString
+    $bstr2 = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($pp)
+    $senhaPainel = [Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr2)
+    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr2)
+
+    if ($senhaPainel.Length -ge 8) {
+      $painelOk = $true
+    }
+    else {
+      Erro "Precisa de pelo menos 8 caracteres"
+    }
+  }
   Ok "Senha do painel aceita"
 
-  # --- segredo de sessao ---
-  # RandomNumberGenerator, nao Get-Random: este e criptografico.
+  # Segredo de sessao. RandomNumberGenerator, nao Get-Random:
+  # este e criptografico, o outro nao.
   $bytes = New-Object byte[] 32
-  [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-  $segredo = -join ($bytes | ForEach-Object { $_.ToString('x2') })
+  $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+  $rng.GetBytes($bytes)
+  $segredo = ""
+  foreach ($b in $bytes) {
+    $segredo = $segredo + $b.ToString("x2")
+  }
   Ok "Segredo de sessao gerado - 64 hex criptografico"
 
-  # --- crossplay ---
+  # Crossplay.
   Write-Host ""
-  Write-Host "  Crossplay (PlayFab): dispensa liberar porta no roteador —" -ForegroundColor Gray
-  Write-Host "  resolve CGNAT e deixa Xbox/Game Pass entrar." -ForegroundColor Gray
+  Write-Host "  Crossplay usa relay da PlayFab: dispensa liberar porta no" -ForegroundColor Gray
+  Write-Host "  roteador, resolve CGNAT, e deixa Xbox/Game Pass entrar." -ForegroundColor Gray
   Write-Host "  Porem NINGUEM entra por IP local, nem voce nesta casa." -ForegroundColor Gray
   $resp = Read-Host "  Ligar crossplay? (s/N)"
-  $crossplay = if ($resp -match '^[sS]') { "true" } else { "false" }
-  $crossArg  = if ($crossplay -eq "true") { "-crossplay" } else { "" }
+  if ($resp -match "^[sS]") {
+    $crossplay = "true"
+    $crossArg = "-crossplay"
+  }
+  else {
+    $crossplay = "false"
+    $crossArg = ""
+  }
   Ok "Crossplay: $crossplay"
 
-  @"
-# Gerado por setup.ps1 em $(Get-Date -Format 'yyyy-MM-dd HH:mm')
-# Este arquivo tem SENHAS. Nao commite, nao compartilhe.
+  $agora = Get-Date -Format "yyyy-MM-dd HH:mm"
 
-VALHEIM_SERVER_NAME=$nomeServidor
-VALHEIM_WORLD_NAME=$Mundo
-VALHEIM_SERVER_PASS=$senhaJogo
-VALHEIM_PORT=2456
-VALHEIM_PUBLIC=false
-VALHEIM_CROSSPLAY=$crossplay
-VALHEIM_CROSSPLAY_ARG=$crossArg
-VALHEIM_SAVE_INTERVAL=600
-VALHEIM_ADMIN_IDS=
-TZ=America/Sao_Paulo
+  $linhas = @()
+  $linhas += "# Gerado por setup.ps1 em $agora"
+  $linhas += "# Este arquivo tem SENHAS. Nao commite, nao compartilhe."
+  $linhas += ""
+  $linhas += "VALHEIM_SERVER_NAME=$nomeServidor"
+  $linhas += "VALHEIM_WORLD_NAME=$Mundo"
+  $linhas += "VALHEIM_SERVER_PASS=$senhaJogo"
+  $linhas += "VALHEIM_PORT=2456"
+  $linhas += "VALHEIM_PUBLIC=false"
+  $linhas += "VALHEIM_CROSSPLAY=$crossplay"
+  $linhas += "VALHEIM_CROSSPLAY_ARG=$crossArg"
+  $linhas += "VALHEIM_SAVE_INTERVAL=600"
+  $linhas += "VALHEIM_ADMIN_IDS="
+  $linhas += "TZ=America/Sao_Paulo"
+  $linhas += ""
+  $linhas += "BACKUP_INTERVAL_HOURS=6"
+  $linhas += "BACKUP_KEEP=14"
+  $linhas += "BACKUP_MAX_AGE_DAYS=30"
+  $linhas += ""
+  $linhas += "PANEL_PORT=9091"
+  $linhas += "PANEL_USER=admin"
+  $linhas += "PANEL_PASS=$senhaPainel"
+  $linhas += "PANEL_SESSION_SECRET=$segredo"
+  $linhas += "PANEL_SESSION_HOURS=12"
+  $linhas += "VALHEIM_CONTAINER=valheim-server"
 
-BACKUP_INTERVAL_HOURS=6
-BACKUP_KEEP=14
-BACKUP_MAX_AGE_DAYS=30
-
-PANEL_PORT=9091
-PANEL_USER=admin
-PANEL_PASS=$senhaPainel
-PANEL_SESSION_SECRET=$segredo
-PANEL_SESSION_HOURS=12
-VALHEIM_CONTAINER=valheim-server
-"@ | Set-Content -Path ".env" -Encoding UTF8
-
+  Set-Content -Path ".env" -Value $linhas -Encoding UTF8
   Ok ".env criado"
 }
 
@@ -164,19 +182,18 @@ $worldsDir = ".\data\config\worlds_local"
 New-Item -ItemType Directory -Force -Path $worldsDir | Out-Null
 New-Item -ItemType Directory -Force -Path ".\data\server" | Out-Null
 New-Item -ItemType Directory -Force -Path ".\backups" | Out-Null
-Ok "data\config\worlds_local, data\server e backups prontos"
+Ok "Pastas data e backups prontas"
 
 # ---------------------------------------------------------------------
-Titulo "4/6  Importando o mundo '$Mundo'"
+Titulo "4/6  Importando o mundo $Mundo"
 
 $destino = Join-Path $worldsDir $Mundo
 
 if (Test-Path $destino) {
   $n = (Get-ChildItem $destino -File | Measure-Object).Count
   Ok "Mundo ja esta no lugar - $n arquivos - nao vou mexer"
-} else {
-
-  # Descobre a origem, se nao foi passada por parametro.
+}
+else {
   if ([string]::IsNullOrWhiteSpace($MundoOrigem)) {
     $saveLocal = Join-Path $env:USERPROFILE "AppData\LocalLow\IronGate\Valheim\worlds_local\$Mundo"
     if (Test-Path $saveLocal) {
@@ -186,80 +203,84 @@ if (Test-Path $destino) {
   }
 
   if ([string]::IsNullOrWhiteSpace($MundoOrigem) -or -not (Test-Path $MundoOrigem)) {
-    Aviso "Mundo '$Mundo' nao encontrado nesta maquina."
+    Aviso "Mundo $Mundo nao encontrado nesta maquina."
     Write-Host ""
-    Write-Host "  O save esta no OUTRO PC. Traga a pasta (pendrive/rede) e rode:" -ForegroundColor Yellow
-    Write-Host "      .\setup.ps1 -MundoOrigem `"D:\caminho\$Mundo`"" -ForegroundColor White
-    Write-Host "  ou, se for zip:" -ForegroundColor Yellow
-    Write-Host "      .\setup.ps1 -MundoOrigem `"D:\caminho\$Mundo.zip`"" -ForegroundColor White
+    Write-Host "  Traga a pasta do save e rode indicando o caminho:" -ForegroundColor Yellow
+    Write-Host "      .\setup.ps1 -MundoOrigem D:\caminho\$Mundo" -ForegroundColor White
+    Write-Host "      .\setup.ps1 -MundoOrigem D:\caminho\$Mundo.zip" -ForegroundColor White
     Write-Host ""
-    Write-Host "  NAO suba o servidor antes disso: ele criaria um mundo" -ForegroundColor Red
-    Write-Host "  vazio com esse nome e a importacao viraria bagunca." -ForegroundColor Red
+    Write-Host "  NAO suba o servidor antes disso: ele criaria um mundo vazio" -ForegroundColor Red
+    Write-Host "  com esse nome e a importacao viraria bagunca." -ForegroundColor Red
     exit 1
   }
 
-  # Importa de .zip ou de pasta.
-  if ($MundoOrigem -like "*.zip") {
-    Write-Host "  Extraindo $MundoOrigem ..."
-    $tmp = Join-Path $env:TEMP "vh-import-$(Get-Random)"
+  if ($MundoOrigem.ToLower().EndsWith(".zip")) {
+    Write-Host "  Extraindo $MundoOrigem"
+    $tmp = Join-Path $env:TEMP ("vh-import-" + (Get-Random))
     New-Item -ItemType Directory -Force -Path $tmp | Out-Null
     try {
       Expand-Archive -Path $MundoOrigem -DestinationPath $tmp -Force
 
-      # O zip pode ter o mundo na raiz ou dentro de uma pasta. Procuramos
-      # a pasta que realmente contem os arquivos do mundo.
-      $cand = Get-ChildItem $tmp -Recurse -Directory |
-              Where-Object { (Get-ChildItem $_.FullName -Filter "_main.*" -File).Count -gt 0 } |
-              Select-Object -First 1
+      # O zip pode ter o mundo na raiz ou aninhado. Procuramos a pasta
+      # que realmente contem os metadados _main.
+      $cand = $null
+      $dirs = Get-ChildItem $tmp -Recurse -Directory
+      foreach ($d in $dirs) {
+        $temMeta = (Get-ChildItem $d.FullName -Filter "_main.*" -File -ErrorAction SilentlyContinue | Measure-Object).Count
+        if ($temMeta -gt 0) {
+          $cand = $d
+          break
+        }
+      }
 
-      if (-not $cand) {
-        # Talvez os arquivos estejam soltos na raiz do zip.
-        if ((Get-ChildItem $tmp -Filter "_main.*" -File).Count -gt 0) {
+      if ($cand -eq $null) {
+        $temMetaRaiz = (Get-ChildItem $tmp -Filter "_main.*" -File -ErrorAction SilentlyContinue | Measure-Object).Count
+        if ($temMetaRaiz -gt 0) {
           $cand = Get-Item $tmp
         }
       }
 
-      if (-not $cand) {
-        Erro "Nao achei um mundo dentro do zip (nenhum arquivo _main.*)."
+      if ($cand -eq $null) {
+        Erro "Nao achei um mundo dentro do zip - nenhum arquivo _main"
         exit 1
       }
 
       Copy-Item $cand.FullName $destino -Recurse
-    } finally {
+    }
+    finally {
       Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }
-  } else {
-    Write-Host "  Copiando de $MundoOrigem ..."
+  }
+  else {
+    Write-Host "  Copiando de $MundoOrigem"
     Copy-Item $MundoOrigem $destino -Recurse
   }
   Ok "Mundo copiado"
 }
 
-# --- validacao do que foi importado ---
-# Mundo sem os metadados _main.* nao abre. Melhor falhar aqui do que
-# o servidor subir e criar um mundo vazio por cima.
+# Validacao: mundo sem os metadados _main nao abre. Melhor falhar aqui
+# do que o servidor subir e criar um mundo vazio por cima.
 $arquivos = Get-ChildItem $destino -File -ErrorAction SilentlyContinue
-$meta     = $arquivos | Where-Object { $_.Name -like "_main.*" }
-$chunks   = $arquivos | Where-Object { $_.Extension -eq ".chunk" }
+$nArq = ($arquivos | Measure-Object).Count
+$nChunk = ($arquivos | Where-Object { $_.Extension -eq ".chunk" } | Measure-Object).Count
+$nMeta = ($arquivos | Where-Object { $_.Name -like "_main.*" } | Measure-Object).Count
 
-$nArq = $arquivos.Count
-$nChunk = $chunks.Count
-$nMeta = $meta.Count
 Write-Host "  Conteudo: $nArq arquivos - $nChunk chunks - $nMeta metadados"
 
-if ($meta.Count -eq 0) {
-  Erro "Nenhum arquivo _main - este mundo nao vai abrir."
-  Write-Host "  A copia veio incompleta. Traga a pasta $Mundo INTEIRA." -ForegroundColor Red
+if ($nMeta -eq 0) {
+  Erro "Nenhum arquivo _main - este mundo nao vai abrir"
+  Write-Host "  A copia veio incompleta. Traga a pasta $Mundo inteira." -ForegroundColor Red
   exit 1
 }
-Ok "Metadados presentes - $nMeta arquivos _main"
+Ok "Metadados presentes"
 
 # ---------------------------------------------------------------------
 Titulo "5/6  Subindo os containers"
 
 if ($SemSubir) {
-  Aviso "Pulando (voce passou -SemSubir)"
-} else {
+  Aviso "Pulando - voce passou -SemSubir"
+}
+else {
   docker compose up -d
   if ($LASTEXITCODE -ne 0) {
     Erro "docker compose falhou. Veja a mensagem acima."
@@ -271,26 +292,27 @@ if ($SemSubir) {
 # ---------------------------------------------------------------------
 Titulo "6/6  Pronto"
 
-$porta = (Select-String -Path ".env" -Pattern '^PANEL_PORT=(.+)$').Matches.Groups[1].Value
-if (-not $porta) { $porta = "9091" }
+$porta = "9091"
+$linhaPorta = Select-String -Path ".env" -Pattern "^PANEL_PORT=" -ErrorAction SilentlyContinue
+if ($linhaPorta -ne $null) {
+  $porta = $linhaPorta.Line.Split("=")[1].Trim()
+}
 
 Write-Host ""
 Write-Host "  Painel:  http://localhost:$porta" -ForegroundColor Green
 Write-Host "  Usuario: admin"
 Write-Host ""
-Write-Host "  A PRIMEIRA subida baixa ~2 GB do Steam e demora." -ForegroundColor Yellow
-Write-Host "  Acompanhe ate aparecer 'Game server connected':"
+Write-Host "  A PRIMEIRA subida baixa cerca de 2 GB do Steam e demora." -ForegroundColor Yellow
+Write-Host "  Acompanhe ate aparecer Game server connected:"
 Write-Host "      docker compose logs -f valheim" -ForegroundColor White
 Write-Host ""
 Write-Host "  Depois que subir, TESTE O BACKUP uma vez pelo painel." -ForegroundColor Yellow
 Write-Host "  Backup que nunca foi testado nao e backup."
 Write-Host ""
 
-# Firewall: so avisa, nao mexe sozinho (precisa de admin).
 $regra = Get-NetFirewallRule -DisplayName "Valheim UDP" -ErrorAction SilentlyContinue
-if (-not $regra) {
-  Write-Host "  Pra galera conectar pela rede local, libere as portas UDP." -ForegroundColor Yellow
-  Write-Host "  Num PowerShell COMO ADMINISTRADOR:" -ForegroundColor Yellow
-  Write-Host '      New-NetFirewallRule -DisplayName "Valheim UDP" -Direction Inbound -Protocol UDP -LocalPort 2456-2457 -Action Allow' -ForegroundColor White
+if ($regra -eq $null) {
+  Write-Host "  Pra conectar pela rede local, libere as portas UDP 2456-2457." -ForegroundColor Yellow
+  Write-Host "  Num PowerShell COMO ADMINISTRADOR, rode o comando do README." -ForegroundColor Yellow
   Write-Host ""
 }
