@@ -68,7 +68,7 @@ try {
 Titulo "2/6  Configurando o .env"
 
 if (Test-Path ".env") {
-  Aviso ".env ja existe — mantendo o que esta la."
+  Aviso ".env ja existe - mantendo o que esta la."
   Write-Host "       (apague o arquivo e rode de novo pra refazer)"
 } else {
 
@@ -115,7 +115,7 @@ if (Test-Path ".env") {
   $bytes = New-Object byte[] 32
   [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
   $segredo = -join ($bytes | ForEach-Object { $_.ToString('x2') })
-  Ok "Segredo de sessao gerado (64 hex, criptografico)"
+  Ok "Segredo de sessao gerado - 64 hex criptografico"
 
   # --- crossplay ---
   Write-Host ""
@@ -173,7 +173,7 @@ $destino = Join-Path $worldsDir $Mundo
 
 if (Test-Path $destino) {
   $n = (Get-ChildItem $destino -File | Measure-Object).Count
-  Ok "Mundo ja esta no lugar ($n arquivos) — nao vou mexer"
+  Ok "Mundo ja esta no lugar - $n arquivos - nao vou mexer"
 } else {
 
   # Descobre a origem, se nao foi passada por parametro.
@@ -242,14 +242,17 @@ $arquivos = Get-ChildItem $destino -File -ErrorAction SilentlyContinue
 $meta     = $arquivos | Where-Object { $_.Name -like "_main.*" }
 $chunks   = $arquivos | Where-Object { $_.Extension -eq ".chunk" }
 
-Write-Host "  Conteudo: $($arquivos.Count) arquivos ($($chunks.Count) chunks, $($meta.Count) metadados)"
+$nArq = $arquivos.Count
+$nChunk = $chunks.Count
+$nMeta = $meta.Count
+Write-Host "  Conteudo: $nArq arquivos - $nChunk chunks - $nMeta metadados"
 
 if ($meta.Count -eq 0) {
-  Erro "Nenhum arquivo _main.* — este mundo nao vai abrir."
+  Erro "Nenhum arquivo _main - este mundo nao vai abrir."
   Write-Host "  A copia veio incompleta. Traga a pasta $Mundo INTEIRA." -ForegroundColor Red
   exit 1
 }
-Ok "Metadados presentes ($($meta.Count) arquivos _main.*)"
+Ok "Metadados presentes - $nMeta arquivos _main"
 
 # ---------------------------------------------------------------------
 Titulo "5/6  Subindo os containers"
