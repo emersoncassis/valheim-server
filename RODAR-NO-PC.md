@@ -3,6 +3,35 @@
 Guia pra subir o servidor num PC Windows com Docker Desktop, trazendo um
 mundo que já existe.
 
+## Caminho rápido: `setup.ps1`
+
+Faz tudo sozinho — confere o Docker, monta o `.env` com as senhas que você
+digitar, gera o segredo, cria as pastas, importa o mundo e sobe.
+
+```powershell
+git clone https://github.com/emersoncassis/valheim-server.git
+cd valheim-server
+.\setup.ps1 -MundoOrigem "D:\ICELAND"
+```
+
+Troque `D:\ICELAND` pelo caminho onde você colocou a pasta do mundo (ou o
+`.zip` dele). Se o mundo já estiver no save local **desta** máquina, pode
+rodar só `.\setup.ps1` que ele acha sozinho.
+
+Se o PowerShell recusar por política de execução:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\setup.ps1 -MundoOrigem "D:\ICELAND"
+```
+
+O script **se recusa a subir sem o mundo**, de propósito: subir primeiro
+criaria um mundo vazio e a importação viraria bagunça.
+
+O resto deste documento é o passo a passo manual — útil se algo falhar ou
+se você quiser entender o que o script fez.
+
+---
+
 Se você só quer testar o painel sem Docker, veja a seção
 "Testar o painel localmente" no [README.md](README.md).
 

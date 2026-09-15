@@ -18,6 +18,12 @@ worlds_local/
 *.db2
 *.fwl2
 
+# Mundos empacotados deixados na raiz pra importar (setup.ps1 -MundoOrigem).
+# Sem isso, um zip de 13 MB do save vai parar no repositório.
+*.zip
+*.tar.gz
+*.7z
+
 # Arquivos que o servidor dedicado gera sozinho
 adminlist.txt
 bannedlist.txt
