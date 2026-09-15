@@ -151,8 +151,29 @@ No Valheim: **Join Game** → aba **Join IP** → digite o IP e porta.
   Fica algo tipo `192.168.0.15`. No jogo: `192.168.0.15:2456`
 
 - **Pela internet:** o Valheim usa **UDP**, e Cloudflare Tunnel não passa
-  UDP. Precisa de uma destas:
-  - Liberar as portas UDP 2456-2458 no roteador (só funciona se sua
+  UDP — o túnel serve pro painel, não pro jogo.
+
+  **O caminho mais fácil é ligar o crossplay.** Segundo o manual oficial,
+  o backend de crossplay (PlayFab) transmite por um servidor de relay, e
+  por isso **não exige liberar porta nenhuma** no roteador. Resolve CGNAT
+  de graça e ainda deixa gente de Xbox/Game Pass entrar.
+
+  No `.env`:
+
+  ```
+  VALHEIM_CROSSPLAY=true
+  ```
+
+  Depois `docker compose up -d --force-recreate`.
+
+  Detalhe do manual: em servidor com crossplay **não dá pra conectar por
+  IP local nem por loopback**. Ou seja, mesmo você, na mesma casa, vai
+  entrar pela lista de servidores ou por join code — não por
+  `192.168.x.x`. Se quiser jogar por IP local, deixe o crossplay
+  desligado.
+
+  Alternativas, se não quiser crossplay:
+  - Liberar as portas UDP 2456-2457 no roteador (só funciona se sua
     operadora te der IP público — muita operadora no Brasil usa CGNAT e aí
     não dá)
   - **playit.gg** — túnel grátis com suporte a UDP
@@ -189,7 +210,7 @@ Se não perguntou e ninguém conecta, libere na mão:
 
 ```powershell
 New-NetFirewallRule -DisplayName "Valheim UDP" -Direction Inbound `
-  -Protocol UDP -LocalPort 2456-2458 -Action Allow
+  -Protocol UDP -LocalPort 2456-2457 -Action Allow
 ```
 
 (PowerShell **como administrador**.)

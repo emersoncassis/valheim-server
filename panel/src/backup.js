@@ -202,6 +202,44 @@ async function createBackup({ worldsDir, backupDir, world, keep, maxAgeDays }) {
 }
 
 /**
+ * Cópia de segurança tirada antes de uma restauração.
+ *
+ * Diferente de createBackup():
+ *  - nunca roda rotação (não pode apagar o backup que vai ser restaurado)
+ *  - usa prefixo pre-restore-, que fica fora da rotação pra sempre
+ *  - o nome inclui milissegundos, então nunca colide com outro backup
+ *    nem com uma segunda restauração no mesmo segundo
+ *
+ * Retorna o nome do arquivo criado, ou lança se o mundo não existe.
+ */
+async function createSafetyBackup({ worldsDir, backupDir, world, now = new Date() }) {
+  await fs.promises.mkdir(backupDir, { recursive: true });
+
+  const worldDir = path.join(worldsDir, world);
+  const legacyDb = path.join(worldsDir, `${world}.db`);
+
+  let entries = null;
+  try {
+    if ((await fs.promises.stat(worldDir)).isDirectory()) entries = [world];
+  } catch { /* tenta o formato antigo */ }
+
+  if (!entries) {
+    await fs.promises.access(legacyDb); // lança se também não existe
+    entries = [`${world}.db`, `${world}.fwl`];
+  }
+
+  const ms = String(now.getMilliseconds()).padStart(3, '0');
+  const name = `pre-restore-${world}-${stamp(now)}${ms}.tar.gz`;
+  const dest = path.join(backupDir, name);
+  const tmp = `${dest}.tmp`;
+
+  await execFileAsync('tar', ['-czf', tmp, '-C', worldsDir, ...entries]);
+  await fs.promises.rename(tmp, dest);
+
+  return name;
+}
+
+/**
  * Restaura um backup por cima do mundo atual.
  * Antes de sobrescrever, salva o estado atual como pre-restore —
  * restaurar o backup errado não pode ser irreversível.
@@ -222,11 +260,20 @@ async function restoreBackup({ worldsDir, backupDir, name, world }) {
   await fs.promises.mkdir(worldsDir, { recursive: true });
 
   // Rede de segurança.
+  //
+  // NÃO usamos createBackup() aqui, por dois motivos que já causaram bug:
+  //  1. createBackup roda a rotação, que pode apagar o próprio arquivo que
+  //     estamos prestes a restaurar.
+  //  2. O nome tem resolução de segundos. Restaurar no mesmo segundo em que
+  //     o backup foi criado gera nome idêntico — o de segurança sobrescreve
+  //     o de origem, e o restore acaba extraindo o mundo atual de volta.
+  //     O sintoma é cruel: parece que restaurou, mas nada mudou.
+  //
+  // O prefixo pre-restore- também mantém esses arquivos fora da rotação
+  // (não casam com BACKUP_RE), então eles nunca são apagados sozinhos.
   let safety = null;
   try {
-    safety = (await createBackup({
-      worldsDir, backupDir, world, keep: 999, maxAgeDays: 0,
-    })).created;
+    safety = await createSafetyBackup({ worldsDir, backupDir, world });
   } catch {
     // Mundo pode não existir ainda (restaurar em servidor limpo). Segue.
   }
@@ -264,6 +311,7 @@ module.exports = {
   parseBackupName,
   planRotation,
   listBackups,
+  createSafetyBackup,
   createBackup,
   restoreBackup,
 };

@@ -186,6 +186,57 @@ test('restore não deixa chunk órfão do mundo anterior', { skip }, async () =>
   }
 });
 
+test('restore no mesmo segundo do backup não sobrescreve a origem', { skip }, async () => {
+  // Bug real: o backup de segurança usava o mesmo formato de nome do backup
+  // normal (resolução de segundos). Restaurar logo após criar gerava nome
+  // idêntico, o de segurança sobrescrevia o de origem, e o restore extraía
+  // o mundo ATUAL de volta. Parecia ter funcionado e não tinha mudado nada.
+  const { root, worldsDir, backupDir } = makeEnv();
+  try {
+    makeWorld10(worldsDir, 'ICELAND', { chunks: ['aa_aa__1_1'] });
+    const r = await backup.createBackup({
+      worldsDir, backupDir, world: 'ICELAND', keep: 10, maxAgeDays: 0,
+    });
+    const tarAntes = fs.readFileSync(path.join(backupDir, r.created));
+
+    // Sem esperar: força a janela de colisão.
+    await backup.restoreBackup({
+      worldsDir, backupDir, name: r.created, world: 'ICELAND',
+    });
+
+    const tarDepois = fs.readFileSync(path.join(backupDir, r.created));
+    assert.ok(
+      tarAntes.equals(tarDepois),
+      'o backup de origem não pode ser sobrescrito pelo de segurança'
+    );
+  } finally {
+    cleanup(root);
+  }
+});
+
+test('backup de segurança fica fora da rotação', { skip }, async () => {
+  // pre-restore-* não casa com o padrão de nome, então listBackups ignora
+  // e a rotação nunca apaga. É de propósito: é a última linha de defesa.
+  const { root, worldsDir, backupDir } = makeEnv();
+  try {
+    makeWorld10(worldsDir, 'ICELAND');
+    const safety = await backup.createSafetyBackup({
+      worldsDir, backupDir, world: 'ICELAND',
+    });
+
+    assert.match(safety, /^pre-restore-ICELAND-/);
+    assert.ok(fs.existsSync(path.join(backupDir, safety)));
+
+    const listados = await backup.listBackups(backupDir);
+    assert.ok(
+      !listados.some((b) => b.name === safety),
+      'backup de segurança não deve entrar na lista que a rotação usa'
+    );
+  } finally {
+    cleanup(root);
+  }
+});
+
 test('restore cria backup de segurança do mundo atual', { skip }, async () => {
   const { root, worldsDir, backupDir } = makeEnv();
   try {

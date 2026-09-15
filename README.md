@@ -75,7 +75,9 @@ docker compose up -d --force-recreate
 
 ### Portas no firewall
 
-Libere **UDP** 2456, 2457 e 2458 (ou `VALHEIM_PORT` +1 +2).
+Libere **UDP** 2456 e 2457 (ou `VALHEIM_PORT` e +1). O manual oficial diz
+que o Valheim usa a porta escolhida e a seguinte — só essas duas. A 2458
+que aparece em muito tutorial não é usada.
 O painel é TCP na porta de `PANEL_PORT` (padrão 9091) — e essa porta é
 melhor **não** expor direto na internet (veja Segurança).
 
@@ -310,7 +312,7 @@ Acompanhe pelo log do serviço `valheim` direto na interface do Dokploy.
   `VALHEIM_CROSSPLAY=true` na flag de linha de comando. Se quiser
   crossplay em produção, adicione também
   `VALHEIM_CROSSPLAY_ARG=-crossplay` direto nas variáveis do Dokploy.
-- **Portas UDP**: libere 2456, 2457, 2458 (UDP) no firewall do servidor
+- **Portas UDP**: libere 2456 e 2457 (UDP) no firewall do servidor
   onde o Dokploy roda. O proxy dele só cuida de HTTP/HTTPS — as portas do
   jogo passam direto, sem proxy.
 - **Volumes**: `./data` (mundo) e `./backups` ficam ao lado do compose,

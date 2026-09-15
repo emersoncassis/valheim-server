@@ -10,9 +10,11 @@ services:
       - ./data/config:/config
       - ./data/server:/opt/valheim
     ports:
+      # O manual oficial diz: o Valheim usa a porta escolhida E porta+1.
+      # Padrão 2456-2457. A 2458 que muitos tutoriais mandam abrir não é
+      # usada pelo jogo — abrir porta à toa é superfície de ataque de graça.
       - "${VALHEIM_PORT:-2456}:${VALHEIM_PORT:-2456}/udp"
       - "${VALHEIM_PORT_1:-2457}:${VALHEIM_PORT_1:-2457}/udp"
-      - "${VALHEIM_PORT_2:-2458}:${VALHEIM_PORT_2:-2458}/udp"
     environment:
       SERVER_NAME: ${VALHEIM_SERVER_NAME:-Meu Servidor Valheim}
       WORLD_NAME: ${VALHEIM_WORLD_NAME:-Dedicated}
@@ -28,10 +30,19 @@ services:
       TZ: ${TZ:-America/Sao_Paulo}
       # Backup nativo da imagem desligado: usamos o nosso, com rotação.
       BACKUPS: "false"
-      # Crossplay é flag de linha de comando. scripts/start.sh preenche isso
-      # a partir de VALHEIM_CROSSPLAY. No Dokploy (que não roda o script),
-      # defina VALHEIM_CROSSPLAY_ARG=-crossplay direto nas variáveis.
-      SERVER_ARGS: ${VALHEIM_CROSSPLAY_ARG:-}
+      # Argumentos passados direto pro valheim_server, conforme o manual
+      # oficial. Duas coisas entram aqui:
+      #
+      # -saveinterval N : de quanto em quanto tempo o mundo é gravado em
+      #   disco (padrão do jogo: 1800s = 30 min). Importa pro backup, que
+      #   copia o que está NO DISCO — com o padrão, um backup pode estar
+      #   até meia hora atrasado. 600s é um meio-termo; salvar com muita
+      #   frequência causa micro-travadas no jogo.
+      #
+      # -crossplay : preenchido por scripts/start.sh a partir de
+      #   VALHEIM_CROSSPLAY. No Dokploy (que não roda o script), defina
+      #   VALHEIM_CROSSPLAY_ARG=-crossplay direto nas variáveis.
+      SERVER_ARGS: -saveinterval ${VALHEIM_SAVE_INTERVAL:-600} ${VALHEIM_CROSSPLAY_ARG:-}
     healthcheck:
       test: ["CMD-SHELL", "pgrep -f valheim_server.x86_64 > /dev/null || exit 1"]
       interval: 30s
